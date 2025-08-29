@@ -270,6 +270,58 @@ def main():
     plt.tight_layout()
     plt.savefig("S_vs_y_param_r_num.png", dpi=300, bbox_inches="tight")
 
+    # ---- Find max of S2 from the left (for a = (w+1)/gamma and a = 6 m / (1-w)) ----
+    EPS_A = 1e-10
+    S0_val = S[0]
+
+    a1_arr = np.where(np.abs(gamma) > EPS_A, (w + 1.0) / gamma, np.nan)
+    a2_arr = np.where(np.abs(1.0 - w) > EPS_A, 6.0 * m / (1.0 - w), np.nan)
+
+    def robust_const(a_arr):
+        aa = a_arr[np.isfinite(a_arr)]
+        return np.nan if aa.size == 0 else np.nanmedian(aa)
+
+    a1 = robust_const(a1_arr)
+    a2 = robust_const(a2_arr)
+
+    def s2_curve(a_const):
+        if not np.isfinite(a_const) or np.abs(a_const) < EPS_A:
+            return None
+        return S0_val * a_const / (rr + a_const)
+
+    def find_max_from_left(S2):
+        if S2 is None:
+            return None
+        valid = np.isfinite(S2)
+        if not np.any(valid):
+            return None
+        # global max over the grid (i.e., scanning from left)
+        idx = np.nanargmax(np.where(valid, S2, -np.inf))
+        return idx, rr[idx], S2[idx]
+
+    S2_a1 = s2_curve(a1)
+    S2_a2 = s2_curve(a2)
+
+    res1 = find_max_from_left(S2_a1)
+    res2 = find_max_from_left(S2_a2)
+
+    if res1:
+        i1, r1, smax1 = res1
+        print(f"S2 max (a=(w+1)/gamma ≈ {a1:.6g}):  S2_max = {smax1:.6g} at r = {r1:.6g}")
+    if res2:
+        i2, r2, smax2 = res2
+        print(f"S2 max (a=6m/(1-w) ≈ {a2:.6g}):    S2_max = {smax2:.6g} at r = {r2:.6g}")
+
+    # (optional) mark maxima on the S_compare figure if it's still current
+    try:
+        if res1 and S2_a1 is not None:
+            plt.scatter([r1], [smax1], zorder=5, s=30, label="max S2 (a=(w+1)/γ)")
+        if res2 and S2_a2 is not None:
+            plt.scatter([r2], [smax2], zorder=5, s=30, marker="x", label="max S2 (a=6m/(1−w))")
+        plt.legend()
+    except Exception:
+        pass
+
     plt.show()
 
     print("\nSaved figures:")
@@ -278,6 +330,8 @@ def main():
     print("  - MK_param_ver2.png")
     print("  - B_Bp_loglog_ver2.png")
     print("  - R_ver2.png")
+
+
 
 
 if __name__ == "__main__":
