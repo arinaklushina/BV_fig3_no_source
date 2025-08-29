@@ -224,16 +224,39 @@ def main():
     plt.grid(True, alpha=0.3); plt.legend(); plt.tight_layout()
     plt.savefig("R_ver2.png", dpi=300, bbox_inches="tight")
 
-    # --- S(r) only ---
+    # ===== Compare S1 (numerical) with S2(r) = S0 * a / (r + a) =====
+    EPS_A = 1e-10
+    S0_val = S[0]  # value at r_min
+
+    # a(r) from both formulas
+    a1_arr = np.where(np.abs(gamma) > EPS_A, (w + 1.0) / gamma, np.nan)
+    a2_arr = np.where(np.abs(1.0 - w) > EPS_A, 6.0 * m / (1.0 - w), np.nan)
+
+    # robust constants (nan-median over valid points)
+    def nanmedian_or_nan(x):
+        x = x[np.isfinite(x)]
+        return np.nan if x.size == 0 else np.nanmedian(x)
+
+    a1_const = nanmedian_or_nan(a1_arr)
+    a2_const = nanmedian_or_nan(a2_arr)
+
+    # analytic curves (only if a is finite and not ~0)
+    S2_a1 = None if not np.isfinite(a1_const) or np.abs(a1_const) < EPS_A else S0_val * a1_const / (rr + a1_const)
+    S2_a2 = None if not np.isfinite(a2_const) or np.abs(a2_const) < EPS_A else S0_val * a2_const / (rr + a2_const)
+
     plt.figure()
-    plt.plot(rr, S, label="S(r)")
+    plt.plot(rr, S, label="S1 (numerical)")
+    if S2_a1 is not None:
+        plt.plot(rr, S2_a1, "--", label=f"S2, a=(w+1)/γ ≈ {a1_const:.3g}")
+    if S2_a2 is not None:
+        plt.plot(rr, S2_a2, ":", label=f"S2, a=6m/(1−w) ≈ {a2_const:.3g}")
     plt.xlabel("r");
     plt.ylabel("S")
-    plt.title("S(r)")
+    plt.title("S1 vs S2(r) = S0·a/(r+a)")
     plt.grid(True, alpha=0.3);
     plt.legend();
     plt.tight_layout()
-    plt.savefig("S_of_r.png", dpi=300, bbox_inches="tight")
+    plt.savefig("S_compare.png", dpi=300, bbox_inches="tight")
 
     # --- S(y) with r as parameter (color = r) ---
     valid = np.isfinite(y) & np.isfinite(S)
@@ -245,7 +268,7 @@ def main():
     plt.colorbar(sc, label="r")
     plt.grid(True, alpha=0.3);
     plt.tight_layout()
-    plt.savefig("S_vs_y_param_r.png", dpi=300, bbox_inches="tight")
+    plt.savefig("S_vs_y_param_r_num.png", dpi=300, bbox_inches="tight")
 
     plt.show()
 
