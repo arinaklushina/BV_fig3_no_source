@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate import solve_bvp
 
 # ----- constants you can tune -----
-OMEGA = 0    # omega
+OMEGA =0    # omega
 LAM   = 1.0     # lambda
 ALPHA = -1.0     # alpha
 
