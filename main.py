@@ -34,6 +34,7 @@ from scipy.integrate import solve_bvp
 OMEGA =0    # omega
 LAM   = 1.0     # lambda
 ALPHA = -1.0     # alpha
+SIGMA = 1.0
 
 R_MIN = 1e-3    # left boundary (>0)
 R_MAX = 80.0    # "infinity"
@@ -222,6 +223,29 @@ def main():
     plt.title("R(r)")
     plt.grid(True, alpha=0.3); plt.legend(); plt.tight_layout()
     plt.savefig("R_ver2.png", dpi=300, bbox_inches="tight")
+
+    # --- S(r) only ---
+    plt.figure()
+    plt.plot(rr, S, label="S(r)")
+    plt.xlabel("r");
+    plt.ylabel("S")
+    plt.title("S(r)")
+    plt.grid(True, alpha=0.3);
+    plt.legend();
+    plt.tight_layout()
+    plt.savefig("S_of_r.png", dpi=300, bbox_inches="tight")
+
+    # --- S(y) with r as parameter (color = r) ---
+    valid = np.isfinite(y) & np.isfinite(S)
+    plt.figure()
+    sc = plt.scatter(y[valid], S[valid], c=rr[valid], s=12)
+    plt.xlabel("y");
+    plt.ylabel("S")
+    plt.title("S(y) (points colored by r)")
+    plt.colorbar(sc, label="r")
+    plt.grid(True, alpha=0.3);
+    plt.tight_layout()
+    plt.savefig("S_vs_y_param_r.png", dpi=300, bbox_inches="tight")
 
     plt.show()
 
