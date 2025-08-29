@@ -7,3 +7,4 @@ Notes for myself:
 1. make an analogy of Lotka-Volterra dynamics
 2. what is this r = 33.0571?
 3. what's r = 0.121059?
+4. why is f not pure zero?
