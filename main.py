@@ -312,15 +312,37 @@ def main():
         i2, r2, smax2 = res2
         print(f"S2 max (a=6m/(1-w) ≈ {a2:.6g}):    S2_max = {smax2:.6g} at r = {r2:.6g}")
 
-    # (optional) mark maxima on the S_compare figure if it's still current
-    try:
-        if res1 and S2_a1 is not None:
-            plt.scatter([r1], [smax1], zorder=5, s=30, label="max S2 (a=(w+1)/γ)")
-        if res2 and S2_a2 is not None:
-            plt.scatter([r2], [smax2], zorder=5, s=30, marker="x", label="max S2 (a=6m/(1−w))")
-        plt.legend()
-    except Exception:
-        pass
+    # --- f(r) from S, S'', alpha ---
+    B_safe = np.where(np.abs(B) < EPS_B, np.sign(B + EPS_NONAN) * EPS_B, B)
+    dy_expr = rr ** 2 * (LAM * S ** 2 - (OMEGA ** 2 / B_safe - Rcurv / 6.0)) * S
+    dB_forced = 2.0 * m / rr ** 2 + gamma - 2.0 * kappa * rr
+    g = rr ** 2 * B_safe
+    g_safe = np.where(np.abs(g) < EPS_B, np.sign(g + EPS_NONAN) * EPS_B, g)
+    gprime = 2.0 * rr * B_safe + rr ** 2 * dB_forced
+    ddS = (dy_expr / g_safe) - Sp * (gprime / g_safe)
+    f_rr = -(1.0 / (2.0 * ALPHA)) * (Sp ** 2 + S * ddS)
+
+    # --- find maximum of f(r) (left-to-right scan over rr) ---
+    valid = np.isfinite(f_rr)
+    idx_max = None
+    if np.any(valid):
+        idx_max = np.nanargmax(np.where(valid, f_rr, -np.inf))
+        r_max = rr[idx_max]
+        f_max = f_rr[idx_max]
+        print(f"f_max = {f_max:.6g} at r = {r_max:.6g}")
+
+    # --- plot and save with max marker + radius in legend ---
+    plt.figure()
+    plt.plot(rr, f_rr, label="f(r)")
+    if idx_max is not None:
+        plt.scatter([r_max], [f_max], s=40, zorder=5, label=f"max at r = {r_max:.4g}")
+    plt.xlabel("r");
+    plt.ylabel("f")
+    plt.title("f(r)")
+    plt.grid(True, alpha=0.3);
+    plt.legend();
+    plt.tight_layout()
+    plt.savefig("f_ver2.png", dpi=300, bbox_inches="tight")
 
     plt.show()
 
