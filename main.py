@@ -135,7 +135,7 @@ def initial_guess(r):
 
 def _compute_B_and_Bp(r, S, y, w, m, gamma, kappa):
     """Helper to compute B and B' on any sampling of r."""
-    B  = w - 2.0*m/r + gamma*r + kappa*r**2
+    B  = w - 2.0*m/r + gamma*r - kappa*r**2
     g  = r**2 * B
     g  = np.where(np.abs(g) < EPS_B, np.sign(g + EPS_NONAN) * EPS_B, g)
     Sp = y / g
@@ -177,7 +177,7 @@ def main():
     Bs, Bps, Sps = _compute_B_and_Bp(rr_short, Ss, ys, ws, ms, gs, ks)
 
     # curvature for plotting R(r)
-    Rcurv = 2.0*(w - 1.0)/rr**2 - 12.0*kappa
+    Rcurv = 2.0*(w - 1.0)/rr**2 + 6*gamma/rr - 12.0*kappa
 
     # ---------- plots (and SAVE) ----------
     plt.figure()
