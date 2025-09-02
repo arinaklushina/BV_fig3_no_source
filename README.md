@@ -13,6 +13,7 @@
 2. What is special about $r = 33.0571$?  
 3. What is $r = 0.121059$?  
 4. Why is $f$ not exactly zero?
+5. UPD: f=0 means dw,dm,dg,dk=0 => no reason to write dw,dm,dg,dk in ODE system (numerical error in f guides the behavior of primes and MK params)
 
 ---
 
