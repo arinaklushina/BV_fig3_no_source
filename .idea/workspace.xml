@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="c44f2281-8da2-434a-b788-e59d9d7054ff" name="Changes" comment="added a 2D plot S(y)">
+      <change beforePath="$PROJECT_DIR$/B_Bp_ver2.png" beforeDir="false" afterPath="$PROJECT_DIR$/B_Bp_ver2.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/MK_param_ver2.png" beforeDir="false" afterPath="$PROJECT_DIR$/MK_param_ver2.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/S_compare.png" beforeDir="false" afterPath="$PROJECT_DIR$/S_compare.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/f_ver2.png" beforeDir="false" afterPath="$PROJECT_DIR$/f_ver2.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;arinaklushina&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/arinaklushina/BV_fig3_no_source.git&quot;,
+    &quot;accountId&quot;: &quot;6bd1ed45-2af7-426e-898b-dc8fad0d521e&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 0
+}</component>
+  <component name="ProjectId" id="31vA632WOb2VGaw8V6oQSqkUgZA" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.main.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "master",
+    "junie.onboarding.icon.badge.shown": "true",
+    "last_opened_file_path": "/Users/arinaklushina/Desktop/tu_physik/SoSe25/CG_project/PythonProject1",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "to.speed.mode.migration.done": "true",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-e03c56caf84a-JavaScript-PY-252.23892.515" />
+        <option value="bundled-python-sdk-7e47963ff851-f0eec537fc84-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.23892.515" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="c44f2281-8da2-434a-b788-e59d9d7054ff" name="Changes" comment="" />
+      <created>1756393993946</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1756393993946</updated>
+      <workItem from="1756393994999" duration="49644000" />
+      <workItem from="1756817089999" duration="2000" />
+      <workItem from="1756903729799" duration="1061000" />
+    </task>
+    <task id="LOCAL-00001" summary="flat B">
+      <option name="closed" value="true" />
+      <created>1756474303346</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1756474303346</updated>
+    </task>
+    <task id="LOCAL-00002" summary="flat B. look at B and B'">
+      <option name="closed" value="true" />
+      <created>1756474545539</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1756474545539</updated>
+    </task>
+    <task id="LOCAL-00003" summary="added a 2D plot S(y)">
+      <option name="closed" value="true" />
+      <created>1756483717733</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1756483717733</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="flat B" />
+    <MESSAGE value="flat B. look at B and B'" />
+    <MESSAGE value="added a 2D plot S(y)" />
+    <option name="LAST_COMMIT_MESSAGE" value="added a 2D plot S(y)" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/BV_fig3_ver3$main.coverage" NAME="main Coverage Results" MODIFIED="1756904696476" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+  </component>
+</project>

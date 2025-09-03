@@ -1,360 +1,198 @@
-# bvp_packaged.py
-# -----------------------------------------------------------
-# Solves the coupled system for Y = [S, y, w, m, gamma, kappa]
-# with algebraic:
-#   B   = w - 2*m/r + gamma*r + kappa*r**2
-#   S'  = y / (r**2 * B)
-# and ODEs:
-#   dy = r**2 * (lam*S**2 - (omega**2/B - R/6)) * S
-#   R  = 2*(w - 1)/r**2 - 12*kappa
-#   dB = 2*m/r**2 + gamma - 2*kappa*r            <-- forced per request
-#   f  = -(1/(2*alpha)) * ((S')**2 + S*S'')
-#   dw      =  0.5       * r**3 * f
-#   dm      = (1.0/12.0) * r**4 * f
-#   dgamma  = -0.5       * r**2 * f
-#   dkappa  = -(1.0/6.0) * r    * f
-#
-# BCs (independent, consistent):
-#   Left:  y(0)=0, w(0)=1, gamma(0)=0, m(0)=0
-#   Right: S(∞)=0, B''(∞)=0   (implemented as 2*kappa(∞)=0)
-#
-# Saves plots:
-#   1) B, B'                 -> B_Bp_ver2.png
-#   2) S, S'                 -> S_Sp_ver2.png
-#   3) w, m, gamma, kappa    -> MK_param_ver2.png
-#   4) log–log (positive)    -> B_Bp_loglog_ver2.png
-#   5) R(r)                  -> R_ver2.png
-# -----------------------------------------------------------
-
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.integrate import solve_bvp
+from scipy.integrate import solve_ivp
+from scipy.optimize import root_scalar
 
-# ----- constants you can tune -----
-OMEGA =0    # omega
-LAM   = 1.0     # lambda
-ALPHA = -1.0     # alpha
-SIGMA = 1.0
+plt.rcParams.update({'font.size': 15})
+plt.rcParams['font.family'] = 'serif'  # Couldn't find Times New Roman, next best thing.
+plt.rcParams['text.usetex'] = True
 
-R_MIN = 1e-3    # left boundary (>0)
-R_MAX = 80.0    # "infinity"
-NPTS  = 800     # initial mesh points
+# ----------------------------
+# Problem parameters
+# ----------------------------
+B0 = 1.0   # B(R_MIN)
+dB0 = 0.0  # B'(R_MIN)
+dddB0 = 0.0  # B'''(R_MIN)
+df0 = 0.0    # f'(R_MIN)
+ALPHA = 1.0  # Poisson constant
 
-KAPPA_INF = 0.1 # only used for initial guess; not a BC
+R_MIN = 1e-6
+R_MAX = 60.0
+NPTS = 1000
 
-# small epsilons for robust divisions
-EPS_B     = 1e-12     # for divides by B or r^2 B
-EPS_NONAN = 1e-30
-
-
-def rhs(r, Y, omega, lam, alpha):
-    """
-    Right-hand side dY/dr for the first-order system.
-
-    Y rows (each is shape (m,)):
-        Y[0] = S
-        Y[1] = y         (y = r^2 * B * S')
-        Y[2] = w
-        Y[3] = m
-        Y[4] = gamma
-        Y[5] = kappa
-    """
-    r = np.asarray(r)
-    S, y, w, m, gamma, kappa = Y
-
-    # B from metric functions
-    B = w - 2.0*m/r + gamma*r + kappa*r**2
-
-    # safe denominators
-    g      = r**2 * B
-    g_safe = np.where(np.abs(g) < EPS_B, np.sign(g + EPS_NONAN) * EPS_B, g)
-    B_safe = np.where(np.abs(B) < EPS_B, np.sign(B + EPS_NONAN) * EPS_B, B)
-
-    # S' from definition
-    dS = y / g_safe
-
-    # curvature-like scalar
-    R = 2.0*(w - 1.0)/r**2 - 12.0*kappa
-
-    # y' from S-equation
-    dy = r**2 * (lam*S**2 - (omega**2/B_safe - R/6.0)) * S
-
-    # ----- dB forced per request -----
-    dB = 2.0*m/r**2 + gamma - 2.0*kappa*r
-
-    # S'' from S' = y / (r^2 B): S'' = (y'/g) - S' * (g'/g), g' = 2 r B + r^2 B'
-    gprime = 2.0*r*B + r**2 * dB
-    ddS = (dy / g_safe) - dS * (gprime / g_safe)
-
-    # f = -(1/(2 alpha)) * ((S')**2 + S S'')
-    f = -(1.0/(2.0*alpha)) * (dS**2 + S*ddS)
-
-    # metric ODEs
-    dw     =  0.5        * r**3 * f
-    dm     = (1.0/12.0)  * r**4 * f
-    dgamma = -0.5        * r**2 * f
-    dkappa = -(1.0/6.0)  * r    * f
-
-    dY = np.vstack((dS, dy, dw, dm, dgamma, dkappa))
-    return dY
-
-
-def bc(ya, yb):
-    """
-    Independent boundary conditions:
-      Left (r ~ 0):   y=0, w=1, gamma=0, m=0
-      Right (r ~ ∞):  S=0, B''(∞)=0  → implemented as 2*kappa(∞)=0
-    """
-    Sa, ya_var, wa, ma, ga, ka = ya
-    Sb, yb_var, wb, mb, gb, kb = yb
-    return np.array([
-        ya_var - 0.0,        # y(0) = 0  ⇒ S'(0)=0
-        wa     - 1.0,        # w(0) = 1
-        ga     - 0.0,        # gamma(0) = 0
-        ma     - 0.0,        # m(0) = 0
-        Sb     - 0.0,        # S(∞) = 0
-        2.0*kb - 0.0         # B''(∞) = 0 (asymptotically, here → -2*kappa ≈ 0 as well)
-    ])
-
-
-def initial_guess(r):
-    """Reasonable initial profiles that roughly satisfy far/near behavior."""
-    S0 = np.exp(-r / 5.0)
-
-    w0 = np.ones_like(r)
-    m0 = np.zeros_like(r)
-    g0 = np.zeros_like(r)     # gamma
-    k0 = KAPPA_INF * np.ones_like(r)  # just a guess; not enforced as BC
-
-    B0  = w0 - 2.0*m0/r + g0*r + k0*r**2
-    S0p = -(1.0/5.0) * np.exp(-r / 5.0)
-    y0  = r**2 * B0 * S0p     # y = r^2 B S'
-
-    return np.vstack([S0, y0, w0, m0, g0, k0])
-
-
-def _compute_B_and_Bp(r, S, y, w, m, gamma, kappa):
-    """Helper to compute B and B' on any sampling of r."""
-    B  = w - 2.0*m/r + gamma*r - kappa*r**2
-    g  = r**2 * B
-    g  = np.where(np.abs(g) < EPS_B, np.sign(g + EPS_NONAN) * EPS_B, g)
-    Sp = y / g
-    # ----- B' forced per request -----
-    Bp = 2.0*m/r**2 + gamma - 2.0*kappa*r
-    return B, Bp, Sp
-
-
-def main():
-    # mesh
+# --- Choose computational mesh for sampling/plotting ---
+USE_LOG_MESH = False
+if USE_LOG_MESH:
+    r = np.geomspace(R_MIN, R_MAX, NPTS)
+else:
     r = np.linspace(R_MIN, R_MAX, NPTS)
 
-    # initial guess
-    Y0 = initial_guess(r)
+# Target boundary conditions at the right boundary
+ddB_target = 2 * 0.1  # Boson stars with kappa=0.1
+f_target = 0.0
 
-    # wrap rhs with constants
-    def fun(r_, Y_):
-        return rhs(r_, Y_, OMEGA, LAM, ALPHA)
+# Define required parameters here
+OMEGA = 1.0
+LAM = 1.0
 
-    # solve
-    sol = solve_bvp(fun, bc, r, Y0, tol=1e-6, max_nodes=200000, verbose=2)
+# ----------------------------
+# ODE system (for IVP)
+# y = [B, dB, ddB, dddB, f, df]
+# ----------------------------
+def ode_rhs_ivp(r, y):
+    B, dB, ddB, dddB, f, df = y
 
-    print("\n=== BVP status ===")
-    print(f"Converged: {sol.success} | message: {sol.message}")
-    print("BC residuals (abs):", np.abs(bc(sol.y[:, 0], sol.y[:, -1])))
+    # Ricci scalar
+    R = 2 * (1 - B) / r**2 - 4 * dB / r - ddB
 
-    # dense sampling for plots
-    rr       = np.linspace(R_MIN, R_MAX, 2000)
-    rr_short = np.linspace(R_MIN, 0.1,   1000)  # zoom near the origin
+    # Poisson: B'''' + 4 B'''/r = -(ALPHA/B)[ ... ]
+    poiss_coeff = -ALPHA / B
+    poiss_brack = (
+        2 * (OMEGA**2) * (f**2) / B
+        + B * (df**2)
+        - (LAM * f**4) / 2
+        + (dB + 2 * B / r) * 2 * f * df / 4
+        - R * (f**2) / 12
+    )
+    ddddB = poiss_coeff * poiss_brack - 4 * dddB / r
 
-    Y        = sol.sol(rr)        # shape (6, len(rr))
-    Ys       = sol.sol(rr_short)  # shape (6, len(rr_short))
+    # Scalar field second derivative
+    dy = (r**2) * (LAM * (f**3) - (OMEGA**2 / B - R / 6) * f)
+    ddf = (dy - 2 * r * B * df - (r**2) * dB * df) / ((r**2) * B)
 
-    S, y, w, m, gamma, kappa   = Y
-    Ss, ys, ws, ms, gs, ks     = Ys
+    return np.array([dB, ddB, dddB, ddddB, df, ddf], dtype=float)
 
-    # Build B, B' (on both grids), and S'
-    B,  Bp,  Sp  = _compute_B_and_Bp(rr,       S,  y,  w,  m,  gamma,  kappa)
-    Bs, Bps, Sps = _compute_B_and_Bp(rr_short, Ss, ys, ws, ms, gs, ks)
+# ----------------------------
+# Shooting on ddB(R_MIN) to match ddB(R_MAX) = ddB_target
+# Left-end fixed:
+#   B(R_MIN)=B0, B'(R_MIN)=dB0, B'''(R_MIN)=dddB0, f(R_MIN)=f_target, f'(R_MIN)=df0
+# Unknown:
+#   ddB(R_MIN) = X  (we solve for X)
+# ----------------------------
+def shoot_residual(ddB_left):
+    y0 = np.array([B0, dB0, ddB_left, dddB0, f_target, df0], dtype=float)
+    sol_ivp = solve_ivp(
+        ode_rhs_ivp, (R_MIN, R_MAX), y0,
+        method='Radau', rtol=1e-8, atol=1e-10
+    )
+    if not sol_ivp.success or not np.isfinite(sol_ivp.y[2, -1]):
+        return np.nan  # let the bracketer/solver handle this
+    ddB_end = sol_ivp.y[2, -1]
+    return ddB_end - ddB_target
 
-    # curvature for plotting R(r)
-    Rcurv = 2.0*(w - 1.0)/rr**2 + 6*gamma/rr - 12.0*kappa
+def find_bracket(fun, x0, step0=0.1, max_expand=30):
+    """Expand symmetrically around x0 until fun(xL) and fun(xR) have opposite signs."""
+    # pick a starting step relative to scale
+    step = step0 * (1.0 + abs(x0))
+    f0 = fun(x0)
+    if np.isfinite(f0) and abs(f0) < 1e-12:
+        return (x0 - step, x0 + step)
 
-    # ---------- plots (and SAVE) ----------
-    plt.figure()
-    plt.plot(rr, B,  label="B(r)")
-    plt.plot(rr, Bp, label="B'(r)", linestyle="--")
-    plt.xlabel("r"); plt.ylabel("value"); plt.title("B and B'")
-    plt.grid(True, alpha=0.3); plt.legend(); plt.tight_layout()
-    plt.savefig("B_Bp_ver2.png", dpi=300, bbox_inches="tight")
+    xL, xR = x0, x0
+    fL, fR = f0, f0
+    for k in range(max_expand):
+        step *= 2.0
+        xL = x0 - step
+        xR = x0 + step
+        fL = fun(xL)
+        fR = fun(xR)
+        if np.isfinite(fL) and np.isfinite(fR) and fL * fR < 0:
+            return (xL, xR)
+    return None
 
+# Try to find a bracketing interval around ddB_target
+bracket = find_bracket(shoot_residual, ddB_target, step0=0.1, max_expand=30)
 
+if bracket is not None:
+    root = root_scalar(shoot_residual, bracket=bracket, method='brentq', xtol=1e-10, rtol=1e-10, maxiter=100)
+else:
+    # fallback: secant from two nearby guesses
+    root = root_scalar(shoot_residual, x0=ddB_target, x1=ddB_target + 0.2, method='secant', xtol=1e-10, rtol=1e-10, maxiter=200)
 
-    plt.figure()
-    plt.plot(rr, S,  label="S(r)")
-    plt.plot(rr, Sp, label="S'(r)", linestyle="--")
-    plt.xlabel("r"); plt.ylabel("value"); plt.title("S and S'")
-    plt.grid(True, alpha=0.3); plt.legend(); plt.tight_layout()
-    plt.savefig("S_Sp_ver2.png", dpi=300, bbox_inches="tight")
+if not root.converged:
+    raise RuntimeError("Shooting failed to converge for ddB(R_MIN).")
 
-    plt.figure()
-    plt.plot(rr, w,     label="w(r)")
-    plt.plot(rr, m,     label="m(r)")
-    plt.plot(rr, gamma, label=r"$\gamma(r)$")
-    plt.plot(rr, kappa, label=r"$\kappa(r)$")
-    plt.xlabel("r"); plt.ylabel("value"); plt.title("w, m, gamma, kappa")
-    plt.grid(True, alpha=0.3); plt.legend(); plt.tight_layout()
-    plt.savefig("MK_param_ver2.png", dpi=300, bbox_inches="tight")
+ddB_left_opt = root.root
+print(f"Optimized ddB(R_MIN) = {ddB_left_opt:.12g}")
 
-    # log–log positive segments
-    B_pos  = np.where(B  > 0, B,  np.nan)
-    Bp_pos = np.where(Bp > 0, Bp, np.nan)
-    plt.figure()
-    plt.loglog(rr, B_pos,  label="B(r) > 0")
-    plt.loglog(rr, Bp_pos, label="B'(r) > 0", linestyle="--")
-    plt.xlabel("r"); plt.ylabel("value")
-    plt.title("Log–log: B and B' (positive segments)")
-    plt.grid(True, which="both", alpha=0.3); plt.legend(); plt.tight_layout()
-    plt.savefig("B_Bp_loglog_ver2.png", dpi=300, bbox_inches="tight")
+# Integrate one more time with optimal left ddB and sample on chosen r-grid
+y0 = np.array([B0, dB0, ddB_left_opt, dddB0, f_target, df0], dtype=float)
+sol_ivp = solve_ivp(
+    ode_rhs_ivp, (R_MIN, R_MAX), y0,
+    method='Radau', t_eval=r, rtol=1e-8, atol=1e-10
+)
+if not sol_ivp.success:
+    raise RuntimeError(f"Radau IVP solver failed: {sol_ivp.message}")
 
-    # R(r)
-    plt.figure()
-    plt.plot(rr, Rcurv, label="R(r)")
-    plt.xlabel("r"); plt.ylabel("R")
-    plt.title("R(r)")
-    plt.grid(True, alpha=0.3); plt.legend(); plt.tight_layout()
-    plt.savefig("R_ver2.png", dpi=300, bbox_inches="tight")
+# Extract solution
+r_vals  = sol_ivp.t
+B_sol   = sol_ivp.y[0]
+dB_sol  = sol_ivp.y[1]
+ddB_sol = sol_ivp.y[2]
+f_sol   = sol_ivp.y[4]
+df_sol  = sol_ivp.y[5]
 
-    # ===== Compare S1 (numerical) with S2(r) = S0 * a / (r + a) =====
-    EPS_A = 1e-10
-    S0_val = S[0]  # value at r_min
+# ----------------------------
+# Plot + asymptotic fit
+# ----------------------------
+fig, ax = plt.subplots(figsize=(12, 7.5))
+ax.set_xlabel(r"$r$")
 
-    # a(r) from both formulas
-    a1_arr = np.where(np.abs(gamma) > EPS_A, (w + 1.0) / gamma, np.nan)
-    a2_arr = np.where(np.abs(1.0 - w) > EPS_A, 6.0 * m / (1.0 - w), np.nan)
+params = [r"$B$", r"$B'$", r"$2B''$", r"$f$", r"$8P_r$"]
+colors = plt.cm.hsv(np.linspace(0, 1, len(params), endpoint=False))
 
-    # robust constants (nan-median over valid points)
-    def nanmedian_or_nan(x):
-        x = x[np.isfinite(x)]
-        return np.nan if x.size == 0 else np.nanmedian(x)
+# ---- Fit B(r) ≈ a/r + b + c r + d r^2 (asymptotics) ----
+r_fit_min = 5.0
+r_fit_max = r_vals.max()
 
-    a1_const = nanmedian_or_nan(a1_arr)
-    a2_const = nanmedian_or_nan(a2_arr)
+mask = (r_vals >= r_fit_min) & (r_vals <= r_fit_max) & np.isfinite(B_sol)
+X = np.column_stack((1.0 / r_vals[mask], np.ones(mask.sum()), r_vals[mask], r_vals[mask]**2))
+y = B_sol[mask]
+a, b, c, d = np.linalg.lstsq(X, y, rcond=None)[0]
 
-    # analytic curves (only if a is finite and not ~0)
-    S2_a1 = None if not np.isfinite(a1_const) or np.abs(a1_const) < EPS_A else S0_val * a1_const / (rr + a1_const)
-    S2_a2 = None if not np.isfinite(a2_const) or np.abs(a2_const) < EPS_A else S0_val * a2_const / (rr + a2_const)
+B_fit = a / r_vals + b + c * r_vals + d * (r_vals**2)
 
-    plt.figure()
-    plt.plot(rr, S, label="S1 (numerical)")
-    if S2_a1 is not None:
-        plt.plot(rr, S2_a1, "--", label=f"S2, a=(w+1)/γ ≈ {a1_const:.3g}")
-    if S2_a2 is not None:
-        plt.plot(rr, S2_a2, ":", label=f"S2, a=6m/(1−w) ≈ {a2_const:.3g}")
-    plt.xlabel("r");
-    plt.ylabel("S")
-    plt.title("S1 vs S2(r) = S0·a/(r+a)")
-    plt.grid(True, alpha=0.3);
-    plt.legend();
-    plt.tight_layout()
-    plt.savefig("S_compare.png", dpi=300, bbox_inches="tight")
+ax.plot(r_vals, B_fit, linestyle='--', linewidth=2,
+        label=fr"fit: ${a:.3g}/r + {b:.3g} + {c:.3g}\,r + {d:.3g}\,r^2$")
 
-    # --- S(y) with r as parameter (color = r) ---
-    valid = np.isfinite(y) & np.isfinite(S)
-    plt.figure()
-    sc = plt.scatter(y[valid], S[valid], c=rr[valid], s=12)
-    plt.xlabel("y");
-    plt.ylabel("S")
-    plt.title("S(y) (points colored by r)")
-    plt.colorbar(sc, label="r")
-    plt.grid(True, alpha=0.3);
-    plt.tight_layout()
-    plt.savefig("S_vs_y_param_r_num.png", dpi=300, bbox_inches="tight")
+w_est     = b
+m_est     = -a / 2.0
+gamma_est = c
+kappa_est = d
+print(f"Fit coefficients: a={a:.6g}, b={b:.6g}, c={c:.6g}, d={d:.6g}")
+print(f"MK estimates   : w≈{w_est:.6g}, m≈{m_est:.6g}, γ≈{gamma_est:.6g}, κ≈{kappa_est:.6g}")
+print(f"Check: 2κ≈{2*kappa_est:.6g} vs ddB_target={ddB_target:.6g}")
 
-    # ---- Find max of S2 from the left (for a = (w+1)/gamma and a = 6 m / (1-w)) ----
-    EPS_A = 1e-10
-    S0_val = S[0]
+# Fit quality
+resid = y - X @ np.array([a, b, c, d])
+rmse  = np.sqrt(np.mean(resid**2))
+sst   = np.sum((y - y.mean())**2)
+r2    = 1 - np.sum(resid**2) / sst
+print(f"Fit window r∈[{r_fit_min}, {r_fit_max}]  RMSE={rmse:.3e}, R^2={r2:.6f}")
 
-    a1_arr = np.where(np.abs(gamma) > EPS_A, (w + 1.0) / gamma, np.nan)
-    a2_arr = np.where(np.abs(1.0 - w) > EPS_A, 6.0 * m / (1.0 - w), np.nan)
+# Solution plots
+ax.plot(r_vals, B_sol,     label=params[0], color=colors[0])
+ax.plot(r_vals, dB_sol,    label=params[1], color=colors[1])
+ax.plot(r_vals, 2 * ddB_sol, label=params[2], color=colors[2])
+ax.plot(r_vals, f_sol,     label=params[3], color=colors[3])
 
-    def robust_const(a_arr):
-        aa = a_arr[np.isfinite(a_arr)]
-        return np.nan if aa.size == 0 else np.nanmedian(aa)
+# Calculating P_r (kept exactly as in your code)
+P_r = (
+    -(OMEGA**2) * (f_sol**2) / (2 * B_sol)
+    - B_sol * (df_sol**2) / 2
+    + LAM * (f_sol**4) / 4
+    - (dB_sol + 4 * B_sol / r_vals) * (2 * f_sol * df_sol) / 12
+    - (dB_sol / r_vals - (1 - B_sol / r_vals**2)) * (f_sol**2) / 6
+)
+ax.plot(r_vals, 8 * P_r, label=params[4], color=colors[4])
 
-    a1 = robust_const(a1_arr)
-    a2 = robust_const(a2_arr)
+ax.legend()
+ax.set_ylim(0, 3)
+ax.set_xlim(0, 10)
+ax.grid()
+plt.ticklabel_format(style='plain')
+plt.subplots_adjust(hspace=0.)
 
-    def s2_curve(a_const):
-        if not np.isfinite(a_const) or np.abs(a_const) < EPS_A:
-            return None
-        return S0_val * a_const / (rr + a_const)
-
-    def find_max_from_left(S2):
-        if S2 is None:
-            return None
-        valid = np.isfinite(S2)
-        if not np.any(valid):
-            return None
-        # global max over the grid (i.e., scanning from left)
-        idx = np.nanargmax(np.where(valid, S2, -np.inf))
-        return idx, rr[idx], S2[idx]
-
-    S2_a1 = s2_curve(a1)
-    S2_a2 = s2_curve(a2)
-
-    res1 = find_max_from_left(S2_a1)
-    res2 = find_max_from_left(S2_a2)
-
-    if res1:
-        i1, r1, smax1 = res1
-        print(f"S2 max (a=(w+1)/gamma ≈ {a1:.6g}):  S2_max = {smax1:.6g} at r = {r1:.6g}")
-    if res2:
-        i2, r2, smax2 = res2
-        print(f"S2 max (a=6m/(1-w) ≈ {a2:.6g}):    S2_max = {smax2:.6g} at r = {r2:.6g}")
-
-    # --- f(r) from S, S'', alpha ---
-    B_safe = np.where(np.abs(B) < EPS_B, np.sign(B + EPS_NONAN) * EPS_B, B)
-    dy_expr = rr ** 2 * (LAM * S ** 2 - (OMEGA ** 2 / B_safe - Rcurv / 6.0)) * S
-    dB_forced = 2.0 * m / rr ** 2 + gamma - 2.0 * kappa * rr
-    g = rr ** 2 * B_safe
-    g_safe = np.where(np.abs(g) < EPS_B, np.sign(g + EPS_NONAN) * EPS_B, g)
-    gprime = 2.0 * rr * B_safe + rr ** 2 * dB_forced
-    ddS = (dy_expr / g_safe) - Sp * (gprime / g_safe)
-    f_rr = -(1.0 / (2.0 * ALPHA)) * (Sp ** 2 + S * ddS)
-
-    # --- find maximum of f(r) (left-to-right scan over rr) ---
-    valid = np.isfinite(f_rr)
-    idx_max = None
-    if np.any(valid):
-        idx_max = np.nanargmax(np.where(valid, f_rr, -np.inf))
-        r_max = rr[idx_max]
-        f_max = f_rr[idx_max]
-        print(f"f_max = {f_max:.6g} at r = {r_max:.6g}")
-
-    # --- plot and save with max marker + radius in legend ---
-    plt.figure()
-    plt.plot(rr, f_rr, label="f(r)")
-    if idx_max is not None:
-        plt.scatter([r_max], [f_max], s=40, zorder=5, label=f"max at r = {r_max:.4g}")
-    plt.xlabel("r");
-    plt.ylabel("f")
-    plt.title("f(r)")
-    plt.grid(True, alpha=0.3);
-    plt.legend();
-    plt.tight_layout()
-    plt.savefig("f_ver2.png", dpi=300, bbox_inches="tight")
-
-    plt.show()
-
-    print("\nSaved figures:")
-    print("  - B_Bp_ver2.png")
-    print("  - S_Sp_ver2.png")
-    print("  - MK_param_ver2.png")
-    print("  - B_Bp_loglog_ver2.png")
-    print("  - R_ver2.png")
-
-
-
-
-if __name__ == "__main__":
-    main()
+plt.savefig("BV_fig3.png", dpi=300, bbox_inches="tight")
+# plt.savefig("BV_fig3.pdf", bbox_inches="tight")  # optional vector copy
+plt.show()
